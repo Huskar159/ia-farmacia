@@ -25,8 +25,10 @@ class AssistenteFarmaceutico:
         self.vectorstore_path = vectorstore_path
         
         # Carregar vectorstore
+        # Forçar CPU para funcionar no Streamlit Cloud (sem GPU)
         self.embeddings = HuggingFaceEmbeddings(
-            model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+            model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+            model_kwargs={'device': 'cpu'}
         )
         
         self.vectorstore = Chroma(
