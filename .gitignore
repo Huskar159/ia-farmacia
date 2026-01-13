@@ -1,0 +1,35 @@
+# Ambiente virtual
+venv/
+env/
+.venv/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Secrets - NUNCA subir!
+.env
+.streamlit/secrets.toml
+
+# Sistema
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Logs
+*.log
+
+# Temporários
+*.tmp
+.cache/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Gemini Artifacts (local)
+.gemini/
