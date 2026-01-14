@@ -1,0 +1,36 @@
+# Requisitos para WhatsApp Bot
+# Deploy no Render (gratuito)
+
+# Flask para servidor web
+flask>=3.0.0
+gunicorn>=22.0.0
+
+# Requisições HTTP
+requests>=2.32.0
+
+# Variáveis de ambiente
+python-dotenv>=1.0.0
+
+# LangChain e LLM
+langchain>=1.2.0
+langchain-core>=1.2.0
+langchain-community>=0.4.0
+langchain-google-genai>=4.0.0
+langchain-huggingface>=1.2.0
+langchain-text-splitters>=1.1.0
+
+# Embeddings e Vectorstore
+chromadb>=1.4.0
+sentence-transformers>=5.0.0
+huggingface-hub>=0.36.0
+
+# Google Gemini
+google-generativeai>=0.8.0
+google-genai>=1.50.0
+
+# PDF (caso precise reindexar)
+pypdf>=6.0.0
+
+# Utilitários
+pydantic>=2.0.0
+numpy>=2.0.0

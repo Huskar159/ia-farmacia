@@ -1,0 +1,137 @@
+# 📋 Walkthrough - Sistema de Recomendação Farmacêutica
+
+## 🎯 Objetivo do Sistema
+
+Sistema de recomendação de fórmulas magistrais baseado na **Farmacopeia Brasileira 6ª Edição**, 
+que analisa sintomas do paciente e sugere medicamentos manipulados apropriados.
+
+## 📊 Status Final
+
+| Componente | Status |
+|------------|--------|
+| Ingestor de PDFs | ✅ Funcionando |
+| Extração de Monografias | ✅ 588 monografias |
+| Vectorstore | ✅ 4493 chunks |
+| Expansão Inteligente (LLM) | ✅ Funcionando |
+| Mapeamento Manual | ✅ ~280+ termos |
+| Interface Streamlit | ✅ Funcionando |
+| Mensagens de Erro | ✅ Explicativas |
+
+---
+
+## ✅ Sintomas que FUNCIONAM
+
+O sistema gera recomendações corretas para:
+
+| Sintoma | Medicamento Sugerido |
+|---------|---------------------|
+| dor de cabeça e febre | PARACETAMOL + DIPIRONA |
+| tosse com catarro | ACETILCISTEÍNA |
+| alergia e dermatite | HIDROCORTISONA + DEXCLORFENIRAMINA |
+| diabetes | METFORMINA + GLIBENCLAMIDA |
+| infecção bacteriana | FENOXIMETILPENICILINA |
+| inflamação e dor muscular | DICLOFENACO + CICLOBENZAPRINA |
+| ansiedade e insônia | DIAZEPAM + FENOBARBITAL |
+| herpes | ACICLOVIR |
+| pressão alta | CAPTOPRIL + ATENOLOL |
+| falta de ar e asma | AMINOFILINA + SALBUTAMOL |
+| azia/queimação | BICARBONATO DE SÓDIO |
+| frieira/micose | ÁCIDO UNDECILÊNICO + MICONAZOL |
+| dor nas articulações | NAPROXENO + SALICILATO |
+
+### 🗣️ Linguagem Natural Suportada
+
+O sistema entende variações informais:
+- "tô mal, cabeça explodindo" ✅
+- "estômago pegando fogo" ✅
+- "garganta arranhando" ✅
+- "mano, bucho zoado" ✅
+
+---
+
+## ⚠️ Limitações da Farmacopeia Brasileira
+
+### Medicamentos NÃO disponíveis na base:
+
+| Classe | Exemplo | Motivo |
+|--------|---------|--------|
+| Antidiarreico | LOPERAMIDA | Não consta na Farmacopeia |
+| Antivertiginoso | BETAHISTINA | Não consta na Farmacopeia |
+| Colírios específicos | LÁGRIMA ARTIFICIAL | Não consta na Farmacopeia |
+| Antitussígeno | DEXTROMETORFANO | Não consta na Farmacopeia |
+
+### Quando o sistema não encontra medicamento:
+
+O sistema exibe uma mensagem explicativa:
+
+> **⚠️ Medicamento Não Disponível na Farmacopeia**
+> 
+> A Farmacopeia Brasileira 6ª Edição é um documento oficial que contém 
+> monografias de medicamentos específicos. Nem todos os medicamentos 
+> existentes no mercado estão catalogados neste documento.
+> 
+> **Isso NÃO significa que não existe tratamento** - apenas que o 
+> medicamento adequado não está disponível na base de dados oficial.
+
+---
+
+## 🔧 Arquitetura do Sistema
+
+```
+Usuário digita sintomas
+        ↓
+[Expansão Inteligente via LLM]
+   - LLM analisa sintomas
+   - Sugere classes terapêuticas
+        ↓
+[Expansão Manual via Mapeamento]
+   - ~280+ termos mapeados
+   - Fallback/complemento
+        ↓
+[Busca no Vectorstore]
+   - 4493 chunks indexados
+   - Apenas medicamentos da Farmacopeia
+        ↓
+[LLM Gera Recomendação]
+   - Usa APENAS medicamentos encontrados
+   - Não inventa medicamentos
+        ↓
+Exibe fórmula + dosagem + alertas
+```
+
+---
+
+## 📁 Arquivos Principais
+
+| Arquivo | Função |
+|---------|--------|
+| [src/ingestor.py](file:///c:/Users/LinkBiz/Desktop/IA%20Farmacia/src/ingestor.py) | Extrai monografias do PDF |
+| [src/core_ai.py](file:///c:/Users/LinkBiz/Desktop/IA%20Farmacia/src/core_ai.py) | Motor RAG + expansão inteligente |
+| [src/app.py](file:///c:/Users/LinkBiz/Desktop/IA%20Farmacia/src/app.py) | Interface Streamlit |
+| [data/monografias_backup.json](file:///c:/Users/LinkBiz/Desktop/IA%20Farmacia/data/monografias_backup.json) | Backup das monografias |
+
+---
+
+## 🚀 Como Executar
+
+```powershell
+# 1. Ativar ambiente
+.\venv\Scripts\activate
+
+# 2. Iniciar interface
+.\venv\Scripts\streamlit run src/app.py
+
+# 3. Reindexar (se necessário)
+Remove-Item -Recurse -Force data/vectorstore
+.\venv\Scripts\python.exe src/ingestor.py
+```
+
+---
+
+## 📈 Estatísticas
+
+- **588 monografias** extraídas do Volume 2
+- **157 classes terapêuticas** identificadas
+- **~280+ termos** mapeados (formais + informais)
+- **4493 chunks** no vectorstore
+- **2 PDFs** processados (volume1.pdf ignorado, volume2.pdf extraído)

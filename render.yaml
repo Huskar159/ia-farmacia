@@ -1,0 +1,18 @@
+# Configuração para Render.com
+services:
+  - type: web
+    name: farmacia-whatsapp-bot
+    env: python
+    buildCommand: pip install -r requirements-whatsapp.txt
+    startCommand: gunicorn src.whatsapp_bot:app --bind 0.0.0.0:$PORT
+    envVars:
+      - key: GOOGLE_API_KEY
+        sync: false
+      - key: WHATSAPP_ACCESS_TOKEN
+        sync: false
+      - key: WHATSAPP_PHONE_NUMBER_ID
+        sync: false
+      - key: WHATSAPP_VERIFY_TOKEN
+        value: farmacia_token_123
+      - key: VECTORSTORE_PATH
+        value: data/vectorstore
