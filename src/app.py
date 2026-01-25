@@ -30,6 +30,12 @@ if "GOOGLE_API_KEY" not in os.environ:
     if api_key:
         os.environ["GOOGLE_API_KEY"] = api_key
 
+# Também exportar GEMINI_MODEL se definido nos secrets
+if "GEMINI_MODEL" not in os.environ:
+    gemini_model = get_secret("GEMINI_MODEL")
+    if gemini_model:
+        os.environ["GEMINI_MODEL"] = gemini_model
+
 from precificacao import calcular_preco, formatar_orcamento
 
 
@@ -195,6 +201,21 @@ que é a referência oficial para padrões de qualidade de medicamentos no Brasi
             """, unsafe_allow_html=True)
         return
     
+    # === ALERTAS CRÍTICOS (Medicamentos Controlados) ===
+    alertas_criticos = resultado.get("alertas_criticos", [])
+    if alertas_criticos:
+        st.markdown("""
+        <div style="background-color: #FF4444; color: white; padding: 1.5rem; border-radius: 10px; margin-bottom: 1.5rem;">
+            <h2 style="color: white; margin: 0;">🚨 ATENÇÃO: MEDICAMENTO CONTROLADO DETECTADO</h2>
+            <p style="margin: 0.5rem 0 0 0;">Esta recomendação requer análise cuidadosa do farmacêutico responsável.</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        for alerta in alertas_criticos:
+            st.error(alerta)
+        
+        st.markdown("---")
+    
     # Exibir fórmula
     formula = resultado.get("formula", {})
     
@@ -209,8 +230,20 @@ que é a referência oficial para padrões de qualidade de medicamentos no Brasi
         
         st.markdown("#### 🧪 Composição:")
         for i, insumo in enumerate(formula.get("insumos", []), 1):
-            with st.expander(f"{i}. {insumo.get('nome', 'N/A')} - {insumo.get('dose', 'N/A')}"):
-                st.write(f"**Justificativa:** {insumo.get('justificativa', 'Não especificada')}")
+            nome_insumo = insumo.get('nome', 'N/A')
+            dose_insumo = insumo.get('dose', 'N/A')
+            
+            # Verificar se é medicamento controlado para destacar
+            medicamentos_controlados = resultado.get("medicamentos_controlados", [])
+            eh_controlado = any(med["nome"].upper() in nome_insumo.upper() for med in medicamentos_controlados)
+            
+            if eh_controlado:
+                with st.expander(f"🚨 {i}. {nome_insumo} - {dose_insumo} (CONTROLADO)"):
+                    st.write(f"**Justificativa:** {insumo.get('justificativa', 'Não especificada')}")
+                    st.error("⚠️ Este é um medicamento controlado. Requer receita especial.")
+            else:
+                with st.expander(f"{i}. {nome_insumo} - {dose_insumo}"):
+                    st.write(f"**Justificativa:** {insumo.get('justificativa', 'Não especificada')}")
         
         st.markdown("#### 📋 Posologia:")
         st.info(resultado.get("posologia", "Não especificada"))
@@ -219,6 +252,19 @@ que é a referência oficial para padrões de qualidade de medicamentos no Brasi
         st.write(resultado.get("justificativa_tecnica", "Não fornecida"))
     
     with col2:
+        # Se tem medicamentos controlados, mostrar seção especial primeiro
+        if alertas_criticos:
+            st.markdown("### 🚨 Medicamentos Controlados")
+            for med in resultado.get("medicamentos_controlados", []):
+                st.markdown(f"""
+                <div style="background-color: #FFE4E1; border-left: 4px solid #FF4444; padding: 0.8rem; margin-bottom: 0.5rem; border-radius: 4px;">
+                    <strong>{med['nome']}</strong><br>
+                    <small>Tarja: {med['tarja']} | {med['classe']}</small><br>
+                    <small style="color: #CC0000;">Risco: {med['risco']}</small>
+                </div>
+                """, unsafe_allow_html=True)
+            st.markdown("---")
+        
         st.markdown("### ⚠️ Alertas de Segurança")
         
         alertas = resultado.get("alertas_seguranca", [])
@@ -226,7 +272,10 @@ que é a referência oficial para padrões de qualidade de medicamentos no Brasi
             for alerta in alertas:
                 st.warning(alerta)
         else:
-            st.success("✅ Nenhum alerta específico")
+            if not alertas_criticos:
+                st.success("✅ Nenhum alerta específico")
+            else:
+                st.info("ℹ️ Verifique os alertas críticos acima.")
         
         st.markdown("### 📖 Referências")
         referencias = resultado.get("referencias", ["Farmacopeia Brasileira 6ª Ed."])
