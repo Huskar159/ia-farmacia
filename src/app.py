@@ -36,6 +36,17 @@ if "GEMINI_MODEL" not in os.environ:
     if gemini_model:
         os.environ["GEMINI_MODEL"] = gemini_model
 
+# Exportar configurações do Groq se definidas nos secrets
+if "GROQ_API_KEY" not in os.environ:
+    groq_key = get_secret("GROQ_API_KEY")
+    if groq_key:
+        os.environ["GROQ_API_KEY"] = groq_key
+
+if "LLM_PROVIDER" not in os.environ:
+    llm_provider = get_secret("LLM_PROVIDER")
+    if llm_provider:
+        os.environ["LLM_PROVIDER"] = llm_provider
+
 from precificacao import calcular_preco, formatar_orcamento
 
 

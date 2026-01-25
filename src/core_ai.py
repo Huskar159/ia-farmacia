@@ -39,7 +39,15 @@ class AssistenteFarmaceutico:
         # Configurar LLM
         self.provider = os.getenv("LLM_PROVIDER", "gemini").lower()
         
-        if self.provider == "gemini":
+        if self.provider == "groq":
+            # Usar Groq com Llama 3.3 70B
+            from langchain_groq import ChatGroq
+            self.llm = ChatGroq(
+                model=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
+                temperature=0.1,
+                groq_api_key=os.getenv("GROQ_API_KEY"),
+            )
+        elif self.provider == "gemini":
             self.llm = ChatGoogleGenerativeAI(
                 model=os.getenv("GEMINI_MODEL", "gemini-2.0-flash"),
                 temperature=0.1,
@@ -47,13 +55,13 @@ class AssistenteFarmaceutico:
                 convert_system_message_to_human=True
             )
         else:
-            print(f"⚠️ Provider '{self.provider}' não suportado nesta versão. Usando Gemini.")
-            self.provider = "gemini"
-            self.llm = ChatGoogleGenerativeAI(
-                model=os.getenv("GEMINI_MODEL", "gemini-2.0-flash"),
+            print(f"⚠️ Provider '{self.provider}' não suportado. Usando Groq como fallback.")
+            self.provider = "groq"
+            from langchain_groq import ChatGroq
+            self.llm = ChatGroq(
+                model=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
                 temperature=0.1,
-                google_api_key=os.getenv("GOOGLE_API_KEY"),
-                convert_system_message_to_human=True
+                groq_api_key=os.getenv("GROQ_API_KEY"),
             )
         
         print(f"✅ Assistente inicializado com {self.provider.upper()}")
@@ -780,6 +788,22 @@ o medicamento adequado não está catalogado neste documento oficial."""
                 "sintomas_originais": sintomas
             }
             
+            # === VALIDAÇÃO DE SEGURANÇA (Medicamentos Controlados) ===
+            if "formula" in resultado:
+                validacao = self.validar_seguranca(resultado["formula"], sintomas)
+                
+                if validacao["requer_atencao_especial"]:
+                    resultado["alertas_criticos"] = validacao["alertas_criticos"]
+                    resultado["medicamentos_controlados"] = validacao["medicamentos_controlados"]
+                    print("🚨 ATENÇÃO: Medicamento controlado detectado!")
+                    for med in validacao["medicamentos_controlados"]:
+                        print(f"   - {med['nome']} (Tarja {med['tarja']})")
+                
+                # Adicionar alertas de validação aos alertas de segurança existentes
+                if validacao["alertas_validacao"]:
+                    alertas_existentes = resultado.get("alertas_seguranca", [])
+                    resultado["alertas_seguranca"] = alertas_existentes + validacao["alertas_validacao"]
+            
             print("✅ Recomendação gerada com sucesso!")
             return resultado
             
@@ -796,10 +820,145 @@ o medicamento adequado não está catalogado neste documento oficial."""
                 "detalhes": str(e)
             }
     
-    def validar_seguranca(self, formula: Dict) -> Dict:
+    # Lista de medicamentos controlados (Tarja Preta/Vermelha)
+    # Estes requerem prescrição especial e atenção redobrada
+    MEDICAMENTOS_CONTROLADOS = {
+        # === TARJA PRETA (B1 - Psicotrópicos) ===
+        "DIAZEPAM": {"tarja": "PRETA", "classe": "Benzodiazepínico", "risco": "Dependência, sedação excessiva"},
+        "CLONAZEPAM": {"tarja": "PRETA", "classe": "Benzodiazepínico", "risco": "Dependência, sedação excessiva"},
+        "ALPRAZOLAM": {"tarja": "PRETA", "classe": "Benzodiazepínico", "risco": "Dependência, sedação excessiva"},
+        "LORAZEPAM": {"tarja": "PRETA", "classe": "Benzodiazepínico", "risco": "Dependência, sedação excessiva"},
+        "BROMAZEPAM": {"tarja": "PRETA", "classe": "Benzodiazepínico", "risco": "Dependência, sedação excessiva"},
+        "MIDAZOLAM": {"tarja": "PRETA", "classe": "Benzodiazepínico", "risco": "Depressão respiratória"},
+        "FENOBARBITAL": {"tarja": "PRETA", "classe": "Barbitúrico", "risco": "Dependência, depressão SNC"},
+        "ZOLPIDEM": {"tarja": "PRETA", "classe": "Hipnótico", "risco": "Dependência, comportamento alterado"},
+        
+        # === TARJA PRETA (Antidepressivos Tricíclicos) ===
+        "AMITRIPTILINA": {"tarja": "VERMELHA", "classe": "Antidepressivo Tricíclico", "risco": "Arritmia, overdose letal"},
+        "CLORIDRATO DE AMITRIPTILINA": {"tarja": "VERMELHA", "classe": "Antidepressivo Tricíclico", "risco": "Arritmia, overdose letal"},
+        "NORTRIPTILINA": {"tarja": "VERMELHA", "classe": "Antidepressivo Tricíclico", "risco": "Arritmia, overdose letal"},
+        "IMIPRAMINA": {"tarja": "VERMELHA", "classe": "Antidepressivo Tricíclico", "risco": "Arritmia, overdose letal"},
+        "CLOMIPRAMINA": {"tarja": "VERMELHA", "classe": "Antidepressivo Tricíclico", "risco": "Arritmia, overdose letal"},
+        
+        # === TARJA VERMELHA (Outros Psicotrópicos) ===
+        "FLUOXETINA": {"tarja": "VERMELHA", "classe": "Antidepressivo ISRS", "risco": "Síndrome serotoninérgica"},
+        "SERTRALINA": {"tarja": "VERMELHA", "classe": "Antidepressivo ISRS", "risco": "Síndrome serotoninérgica"},
+        "PAROXETINA": {"tarja": "VERMELHA", "classe": "Antidepressivo ISRS", "risco": "Síndrome de descontinuação"},
+        "CITALOPRAM": {"tarja": "VERMELHA", "classe": "Antidepressivo ISRS", "risco": "Prolongamento QT"},
+        "ESCITALOPRAM": {"tarja": "VERMELHA", "classe": "Antidepressivo ISRS", "risco": "Prolongamento QT"},
+        "VENLAFAXINA": {"tarja": "VERMELHA", "classe": "Antidepressivo IRSN", "risco": "Hipertensão, descontinuação"},
+        "DULOXETINA": {"tarja": "VERMELHA", "classe": "Antidepressivo IRSN", "risco": "Hepatotoxicidade"},
+        "BUPROPIONA": {"tarja": "VERMELHA", "classe": "Antidepressivo", "risco": "Convulsões em doses altas"},
+        
+        # === TARJA VERMELHA (Antipsicóticos) ===
+        "HALOPERIDOL": {"tarja": "VERMELHA", "classe": "Antipsicótico", "risco": "Síndrome extrapiramidal"},
+        "CLORPROMAZINA": {"tarja": "VERMELHA", "classe": "Antipsicótico", "risco": "Sedação, hipotensão"},
+        "RISPERIDONA": {"tarja": "VERMELHA", "classe": "Antipsicótico", "risco": "Ganho de peso, diabetes"},
+        "QUETIAPINA": {"tarja": "VERMELHA", "classe": "Antipsicótico", "risco": "Sedação, síndrome metabólica"},
+        "OLANZAPINA": {"tarja": "VERMELHA", "classe": "Antipsicótico", "risco": "Ganho de peso, diabetes"},
+        
+        # === TARJA AMARELA (A1 - Entorpecentes/Opioides) ===
+        "MORFINA": {"tarja": "AMARELA", "classe": "Opioide", "risco": "Dependência, depressão respiratória"},
+        "CODEÍNA": {"tarja": "AMARELA", "classe": "Opioide", "risco": "Dependência, constipação"},
+        "TRAMADOL": {"tarja": "VERMELHA", "classe": "Opioide", "risco": "Dependência, convulsões"},
+        "METADONA": {"tarja": "AMARELA", "classe": "Opioide", "risco": "Depressão respiratória prolongada"},
+        "OXICODONA": {"tarja": "AMARELA", "classe": "Opioide", "risco": "Alta dependência"},
+        "FENTANILA": {"tarja": "AMARELA", "classe": "Opioide", "risco": "Depressão respiratória grave"},
+        
+        # === TARJA VERMELHA (Anticonvulsivantes) ===
+        "CARBAMAZEPINA": {"tarja": "VERMELHA", "classe": "Anticonvulsivante", "risco": "Síndrome Stevens-Johnson, agranulocitose"},
+        "FENITOÍNA": {"tarja": "VERMELHA", "classe": "Anticonvulsivante", "risco": "Hiperplasia gengival, ataxia"},
+        "VALPROATO": {"tarja": "VERMELHA", "classe": "Anticonvulsivante", "risco": "Hepatotoxicidade, teratogenia"},
+        "ÁCIDO VALPRÓICO": {"tarja": "VERMELHA", "classe": "Anticonvulsivante", "risco": "Hepatotoxicidade, teratogenia"},
+        "LAMOTRIGINA": {"tarja": "VERMELHA", "classe": "Anticonvulsivante", "risco": "Síndrome Stevens-Johnson"},
+        "TOPIRAMATO": {"tarja": "VERMELHA", "classe": "Anticonvulsivante", "risco": "Glaucoma, acidose metabólica"},
+        "GABAPENTINA": {"tarja": "VERMELHA", "classe": "Anticonvulsivante", "risco": "Sedação, dependência"},
+        "PREGABALINA": {"tarja": "VERMELHA", "classe": "Anticonvulsivante", "risco": "Dependência, sedação"},
+    }
+    
+    # Sintomas vagos que NÃO justificam medicamentos controlados
+    SINTOMAS_VAGOS = [
+        "fraqueza", "cansaço", "cansado", "fraco", "fadigado", "fadiga",
+        "mal estar", "indisposição", "indisposto", "sem energia", "desânimo",
+        "sono ruim", "dormindo mal", "não durmo bem", "acordo cansado",
+        "estresse", "estressado", "nervoso", "ansioso", "preocupado",
+        "triste", "desanimado", "sem vontade", "desmotivado"
+    ]
+    
+    def verificar_medicamento_controlado(self, nome_medicamento: str) -> Dict:
+        """Verifica se um medicamento é controlado e retorna informações."""
+        nome_upper = nome_medicamento.upper().strip()
+        
+        # Busca exata
+        if nome_upper in self.MEDICAMENTOS_CONTROLADOS:
+            return {
+                "controlado": True,
+                **self.MEDICAMENTOS_CONTROLADOS[nome_upper]
+            }
+        
+        # Busca parcial (ex: "CLORIDRATO DE DIAZEPAM" contém "DIAZEPAM")
+        for med, info in self.MEDICAMENTOS_CONTROLADOS.items():
+            if med in nome_upper or nome_upper in med:
+                return {
+                    "controlado": True,
+                    **info
+                }
+        
+        return {"controlado": False}
+    
+    def sintoma_eh_vago(self, sintomas: str) -> bool:
+        """Verifica se os sintomas são muito vagos para justificar medicamentos controlados."""
+        sintomas_lower = sintomas.lower()
+        
+        # Conta quantos termos vagos aparecem
+        termos_vagos_encontrados = sum(1 for termo in self.SINTOMAS_VAGOS if termo in sintomas_lower)
+        
+        # Se a maioria dos termos são vagos, é um sintoma vago
+        palavras_sintoma = len(sintomas_lower.split())
+        
+        # Se tem mais de 50% de termos vagos ou o sintoma é muito curto
+        return termos_vagos_encontrados > 0 and palavras_sintoma < 10
+    
+    def validar_seguranca(self, formula: Dict, sintomas_originais: str = "") -> Dict:
         """Valida aspectos de segurança da fórmula gerada."""
         alertas = []
+        alertas_criticos = []  # Alertas de medicamentos controlados
+        medicamentos_controlados_detectados = []
         
+        # === VALIDAÇÃO DE MEDICAMENTOS CONTROLADOS ===
+        for insumo in formula.get("insumos", []):
+            nome = insumo.get("nome", "")
+            info_controlado = self.verificar_medicamento_controlado(nome)
+            
+            if info_controlado["controlado"]:
+                medicamentos_controlados_detectados.append({
+                    "nome": nome,
+                    **info_controlado
+                })
+                
+                alerta_critico = (
+                    f"🚨 MEDICAMENTO CONTROLADO: {nome}\n"
+                    f"   • Tarja: {info_controlado['tarja']}\n"
+                    f"   • Classe: {info_controlado['classe']}\n"
+                    f"   • Risco: {info_controlado['risco']}\n"
+                    f"   • REQUER: Receita especial + Avaliação médica prévia"
+                )
+                alertas_criticos.append(alerta_critico)
+        
+        # Verificar se sintomas vagos + medicamento controlado = ALERTA MÁXIMO
+        if medicamentos_controlados_detectados and sintomas_originais:
+            if self.sintoma_eh_vago(sintomas_originais):
+                alertas_criticos.insert(0, 
+                    "⛔ ATENÇÃO CRÍTICA: Medicamento controlado sugerido para sintomas VAGOS!\n"
+                    "   A IA pode ter feito uma conexão inadequada.\n"
+                    "   RECOMENDAÇÃO: Antes de prescrever, investigue:\n"
+                    "   - Exames laboratoriais (hemograma, glicemia, TSH)\n"
+                    "   - Histórico do paciente\n"
+                    "   - Possíveis causas orgânicas\n"
+                    "   Este tipo de sintoma geralmente NÃO requer psicotrópicos."
+                )
+        
+        # === VALIDAÇÕES EXISTENTES ===
         num_insumos = len(formula.get("insumos", []))
         if num_insumos > 5:
             alertas.append("⚠️ Fórmula com muitos insumos (>5). Revisar interações.")
@@ -814,8 +973,11 @@ o medicamento adequado não está catalogado neste documento oficial."""
                 alertas.append(f"⚠️ Unidade de medida não clara para: {insumo.get('nome')}")
         
         return {
-            "aprovado": len(alertas) == 0,
-            "alertas_validacao": alertas
+            "aprovado": len(alertas_criticos) == 0 and len(alertas) == 0,
+            "alertas_validacao": alertas,
+            "alertas_criticos": alertas_criticos,
+            "medicamentos_controlados": medicamentos_controlados_detectados,
+            "requer_atencao_especial": len(alertas_criticos) > 0
         }
 
 

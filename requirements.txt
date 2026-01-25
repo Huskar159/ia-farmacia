@@ -10,6 +10,7 @@ langchain-community
 langchain-google-genai
 langchain-huggingface
 langchain-text-splitters
+langchain-groq
 
 chromadb
 sentence-transformers
@@ -18,4 +19,4 @@ google-generativeai
 
 pypdf
 pydantic
-numpy<2.0.0
+numpy
